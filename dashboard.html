@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AppLink — Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --surface: #131313;
+    --surface2: #1a1a1a;
+    --border: #222;
+    --accent: #e8ff47;
+    --ios: #47c8ff;
+    --android: #78e08f;
+    --fallback: #f0a500;
+    --text: #f0f0f0;
+    --muted: #555;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+  header {
+    padding: 28px 32px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: gap;
+  }
+  header h1 { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; }
+  header h1 span { color: var(--accent); }
+  .last-update { font-size: 12px; color: var(--muted); }
+
+  .filters {
+    padding: 20px 32px;
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+    border-bottom: 1px solid var(--border);
+  }
+  .preset-btn {
+    padding: 7px 16px; border-radius: 100px; border: 1px solid var(--border);
+    background: transparent; color: var(--muted); font-family: 'DM Sans', sans-serif;
+    font-size: 13px; cursor: pointer; transition: all .2s;
+  }
+  .preset-btn:hover, .preset-btn.active {
+    border-color: var(--accent); color: var(--accent); background: rgba(232,255,71,.06);
+  }
+  .date-sep { color: var(--muted); font-size: 13px; }
+  input[type=date] {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); padding: 7px 12px; font-size: 13px; font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+  }
+  input[type=date]:focus { outline: none; border-color: var(--accent); }
+
+  .main { padding: 28px 32px; display: flex; flex-direction: column; gap: 24px; }
+
+  /* Cards de totais */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    padding: 20px 22px; position: relative; overflow: hidden;
+  }
+  .card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--card-color, var(--accent));
+  }
+  .card-label { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 8px; }
+  .card-value { font-family: 'Syne', sans-serif; font-size: 36px; font-weight: 800; line-height: 1; }
+  .card-sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .card-icon { position: absolute; top: 18px; right: 18px; font-size: 22px; opacity: .3; }
+
+  /* Gráficos */
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 900px) { .charts { grid-template-columns: 1fr; } }
+
+  .chart-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 22px;
+  }
+  .chart-card.full { grid-column: 1 / -1; }
+  .chart-title { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; margin-bottom: 18px; color: var(--text); }
+  .chart-wrap { position: relative; height: 240px; }
+  .chart-wrap.tall { height: 300px; }
+
+  /* Indicadores extras */
+  .indicators { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+  .ind-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 18px 20px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .ind-label { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  .ind-value { font-family: 'Syne', sans-serif; font-size: 24px; font-weight: 700; }
+  .ind-desc { font-size: 12px; color: var(--muted); }
+
+  /* Loading */
+  .loading { text-align: center; padding: 60px; color: var(--muted); font-size: 14px; }
+  .dot-anim::after { content: ''; animation: dots 1.5s infinite; }
+  @keyframes dots { 0%{content:'.'} 33%{content:'..'} 66%{content:'...'} }
+
+  /* Barra de share */
+  .share-bar { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+  .share-seg { height: 6px; border-radius: 3px; transition: width .5s; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>App<span>Link</span> <span style="font-weight:400;font-size:14px;color:var(--muted)">· Papelaria Unicórnio</span></h1>
+  <div class="last-update" id="lastUpdate">Carregando…</div>
+</header>
+
+<div class="filters">
+  <button class="preset-btn active" data-preset="month">Este mês</button>
+  <button class="preset-btn" data-preset="lastmonth">Mês passado</button>
+  <button class="preset-btn" data-preset="30d">Últimos 30 dias</button>
+  <button class="preset-btn" data-preset="all">Todo período</button>
+  <div class="date-sep">ou</div>
+  <input type="date" id="fromDate">
+  <div class="date-sep">até</div>
+  <input type="date" id="toDate">
+</div>
+
+<div class="main">
+  <div id="content" class="loading"><span class="dot-anim">Carregando dados</span></div>
+</div>
+
+<script>
+let lineChart, donutChart, hourChart;
+let firstAccessDate = null;
+
+function fmt(n) { return Number(n).toLocaleString('pt-BR'); }
+
+function getPresetDates(preset) {
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth();
+  if (preset === 'month') {
+    return [new Date(y, m, 1), new Date(y, m+1, 0)];
+  } else if (preset === 'lastmonth') {
+    return [new Date(y, m-1, 1), new Date(y, m, 0)];
+  } else if (preset === '30d') {
+    const from = new Date(); from.setDate(from.getDate() - 29);
+    return [from, new Date()];
+  } else {
+    return [firstAccessDate ? new Date(firstAccessDate) : new Date(2020,0,1), new Date()];
+  }
+}
+
+function dateStr(d) { return d.toISOString().split('T')[0]; }
+
+function setInputDates(from, to) {
+  document.getElementById('fromDate').value = dateStr(from);
+  document.getElementById('toDate').value = dateStr(to);
+}
+
+async function loadData() {
+  const from = document.getElementById('fromDate').value;
+  const to = document.getElementById('toDate').value;
+  if (!from || !to) return;
+
+  const res = await fetch(`/api/stats?from=${from}&to=${to + 'T23:59:59'}`);
+  const data = await res.json();
+  if (data.error) { document.getElementById('content').innerHTML = `<p style="color:red">Erro: ${data.error}</p>`; return; }
+
+  firstAccessDate = data.firstAccess;
+
+  const totalsMap = {};
+  data.totals.forEach(r => totalsMap[r.platform] = parseInt(r.count));
+  const ios = totalsMap.ios || 0;
+  const android = totalsMap.android || 0;
+  const fallback = totalsMap.fallback || 0;
+  const total = ios + android + fallback;
+
+  const pct = (n) => total ? ((n/total)*100).toFixed(1) + '%' : '0%';
+
+  // Peak day
+  const dayMap = {};
+  data.daily.forEach(r => {
+    dayMap[r.date] = (dayMap[r.date] || 0) + parseInt(r.count);
+  });
+  const peakDay = Object.entries(dayMap).sort((a,b) => b[1]-a[1])[0];
+  const peakHour = data.hourly.sort((a,b) => b.count-a.count)[0];
+
+  // Days with access
+  const daysWithAccess = Object.keys(dayMap).length;
+  const avgPerDay = daysWithAccess ? (total / daysWithAccess).toFixed(1) : 0;
+
+  document.getElementById('content').innerHTML = `
+    <div class="cards">
+      <div class="card" style="--card-color:#e8ff47">
+        <div class="card-icon">📊</div>
+        <div class="card-label">Total de acessos</div>
+        <div class="card-value">${fmt(total)}</div>
+        <div class="card-sub">${daysWithAccess} dia(s) com acessos</div>
+      </div>
+      <div class="card" style="--card-color:var(--ios)">
+        <div class="card-icon"></div>
+        <div class="card-label">iOS</div>
+        <div class="card-value">${fmt(ios)}</div>
+        <div class="card-sub">${pct(ios)} do total</div>
+      </div>
+      <div class="card" style="--card-color:var(--android)">
+        <div class="card-icon">🤖</div>
+        <div class="card-label">Android</div>
+        <div class="card-value">${fmt(android)}</div>
+        <div class="card-sub">${pct(android)} do total</div>
+      </div>
+      <div class="card" style="--card-color:var(--fallback)">
+        <div class="card-icon">🖥️</div>
+        <div class="card-label">Outros / Desktop</div>
+        <div class="card-value">${fmt(fallback)}</div>
+        <div class="card-sub">${pct(fallback)} do total</div>
+      </div>
+    </div>
+
+    <div class="charts">
+      <div class="chart-card full">
+        <div class="chart-title">Acessos ao longo do tempo</div>
+        <div class="chart-wrap tall"><canvas id="lineChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Distribuição por plataforma</div>
+        <div class="chart-wrap"><canvas id="donutChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Acessos por hora do dia</div>
+        <div class="chart-wrap"><canvas id="hourChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="indicators">
+      <div class="ind-card">
+        <div class="ind-label">Média diária</div>
+        <div class="ind-value">${avgPerDay}</div>
+        <div class="ind-desc">acessos por dia com registro</div>
+      </div>
+      <div class="ind-card">
+        <div class="ind-label">Dia de pico</div>
+        <div class="ind-value">${peakDay ? new Date(peakDay[0]+'T12:00:00').toLocaleDateString('pt-BR') : '—'}</div>
+        <div class="ind-desc">${peakDay ? fmt(peakDay[1]) + ' acessos' : 'sem dados'}</div>
+      </div>
+      <div class="ind-card">
+        <div class="ind-label">Horário de pico</div>
+        <div class="ind-value">${peakHour ? peakHour.hour + 'h' : '—'}</div>
+        <div class="ind-desc">${peakHour ? fmt(peakHour.count) + ' acessos nessa hora' : 'sem dados'}</div>
+      </div>
+      <div class="ind-card">
+        <div class="ind-label">Plataforma líder</div>
+        <div class="ind-value">${ios >= android ? (ios >= fallback ? 'iOS' : 'Outros') : (android >= fallback ? 'Android' : 'Outros')}</div>
+        <div class="ind-desc">${pct(Math.max(ios, android, fallback))} dos acessos</div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('lastUpdate').textContent = 'Atualizado: ' + new Date().toLocaleTimeString('pt-BR');
+
+  // Line chart
+  const allDates = [...new Set(data.daily.map(r => r.date))].sort();
+  const iosData = allDates.map(d => data.daily.filter(r => r.date === d && r.platform === 'ios').reduce((s,r) => s + parseInt(r.count), 0));
+  const andData = allDates.map(d => data.daily.filter(r => r.date === d && r.platform === 'android').reduce((s,r) => s + parseInt(r.count), 0));
+  const fbData  = allDates.map(d => data.daily.filter(r => r.date === d && r.platform === 'fallback').reduce((s,r) => s + parseInt(r.count), 0));
+  const labels  = allDates.map(d => new Date(d+'T12:00:00').toLocaleDateString('pt-BR', {day:'2-digit', month:'short'}));
+
+  if (lineChart) lineChart.destroy();
+  lineChart = new Chart(document.getElementById('lineChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'iOS', data: iosData, borderColor: '#47c8ff', backgroundColor: 'rgba(71,200,255,.1)', tension: .4, fill: true, pointRadius: 3 },
+        { label: 'Android', data: andData, borderColor: '#78e08f', backgroundColor: 'rgba(120,224,143,.1)', tension: .4, fill: true, pointRadius: 3 },
+        { label: 'Outros', data: fbData, borderColor: '#f0a500', backgroundColor: 'rgba(240,165,0,.1)', tension: .4, fill: true, pointRadius: 3 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#888', font: { family: 'DM Sans' } } } },
+      scales: {
+        x: { grid: { color: '#1a1a1a' }, ticks: { color: '#555', font: { family: 'DM Sans', size: 11 } } },
+        y: { grid: { color: '#1a1a1a' }, ticks: { color: '#555', font: { family: 'DM Sans', size: 11 } } }
+      }
+    }
+  });
+
+  // Donut chart
+  if (donutChart) donutChart.destroy();
+  donutChart = new Chart(document.getElementById('donutChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['iOS', 'Android', 'Outros'],
+      datasets: [{ data: [ios, android, fallback], backgroundColor: ['#47c8ff', '#78e08f', '#f0a500'], borderWidth: 0, hoverOffset: 6 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '68%',
+      plugins: { legend: { position: 'bottom', labels: { color: '#888', font: { family: 'DM Sans' }, padding: 16 } } }
+    }
+  });
+
+  // Hour chart
+  const hours = Array.from({length:24}, (_,i) => i);
+  const hourData = hours.map(h => { const r = data.hourly.find(x => parseInt(x.hour) === h); return r ? parseInt(r.count) : 0; });
+  if (hourChart) hourChart.destroy();
+  hourChart = new Chart(document.getElementById('hourChart'), {
+    type: 'bar',
+    data: {
+      labels: hours.map(h => h + 'h'),
+      datasets: [{ label: 'Acessos', data: hourData, backgroundColor: 'rgba(232,255,71,.5)', borderColor: '#e8ff47', borderWidth: 1, borderRadius: 4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#1a1a1a' }, ticks: { color: '#555', font: { family: 'DM Sans', size: 10 }, maxRotation: 0 } },
+        y: { grid: { color: '#1a1a1a' }, ticks: { color: '#555', font: { family: 'DM Sans', size: 11 } } }
+      }
+    }
+  });
+}
+
+// Preset buttons
+document.querySelectorAll('.preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const [from, to] = getPresetDates(btn.dataset.preset);
+    setInputDates(from, to);
+    loadData();
+  });
+});
+
+// Date inputs
+['fromDate','toDate'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => {
+    document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+    loadData();
+  });
+});
+
+// Init: carrega "este mês" por padrão
+const now = new Date();
+setInputDates(new Date(now.getFullYear(), now.getMonth(), 1), new Date());
+loadData();
+</script>
+</body>
+</html>
